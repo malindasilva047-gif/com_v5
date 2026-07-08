@@ -1,5 +1,6 @@
 export const isWish = (id, wList) => {
-  if (wList !== null && wList.includes(id) === true) {
+  // Guard clause to ensure wList is initialized and is an array
+  if (wList && Array.isArray(wList) && wList.includes(id) === true) {
     return true;
   }
   return false;
@@ -49,4 +50,15 @@ export const prevSlide = (totalImg, slide, setSlide) => {
   } else if (slide === totalImg - 1) {
     setSlide(0);
   }
+};
+
+export const totalCost = () => {
+  let total = 0;
+  let cart = JSON.parse(localStorage.getItem("cart")) || []; 
+  if (cart.length > 0) {
+    cart.forEach((item) => {
+      total += item.price * item.quantity;
+    });
+  }
+  return total;
 };
