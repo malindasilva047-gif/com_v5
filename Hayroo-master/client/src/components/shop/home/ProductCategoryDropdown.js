@@ -1,3 +1,4 @@
+// C:\lakmal_code\com_v5\com_v5\Hayroo-master\client\src\components\shop\home\ProductCategoryDropdown.js
 import React, { Fragment, useContext, useState, useEffect, useRef } from "react";
 import { useHistory } from "react-router-dom";
 import { HomeContext } from "./index";
@@ -63,7 +64,7 @@ const CategoryList = () => {
         className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full shadow-xl transition-all duration-200 focus:outline-none ${
           canScrollLeft
             ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:scale-110 cursor-pointer opacity-100 shadow-orange-500/30"
-            : "bg-gray-800 text-gray-600 cursor-not-allowed opacity-40"
+            : "bg-gray-300 text-gray-500 cursor-not-allowed opacity-40"
         }`}
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +72,7 @@ const CategoryList = () => {
         </svg>
       </button>
 
-      {/* Single-Row Horizontal Category Slider (Always Displayed) */}
+      {/* Single-Row Horizontal Category Slider with Pure #000000 Black Text */}
       <div
         ref={scrollRef}
         onScroll={checkScrollState}
@@ -84,23 +85,24 @@ const CategoryList = () => {
               <div
                 key={index}
                 onClick={() => history.push(`/products/category/${item._id}`)}
-                className="flex-shrink-0 w-44 md:w-52 flex flex-col items-center justify-center p-5 rounded-2xl bg-gradient-to-b from-gray-900 to-gray-950 border border-orange-500/20 hover:border-orange-500/80 shadow-lg hover:shadow-orange-500/20 transition-all duration-300 transform hover:scale-105 cursor-pointer group/card"
+                className="flex-shrink-0 w-44 md:w-52 flex flex-col items-center justify-center p-5 rounded-2xl bg-white border-2 border-gray-200 hover:border-orange-500 shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer group/card"
               >
-                <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden p-1 bg-gradient-to-tr from-amber-500 via-orange-500 to-red-500 group-hover/card:scale-110 transition-transform duration-300 shadow-md">
+                <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden p-1 bg-gradient-to-tr from-amber-500 via-orange-500 to-red-500 group-hover/card:scale-110 transition-transform duration-300 shadow-sm">
                   <img
-                    className="w-full h-full object-cover rounded-full bg-gray-900"
+                    className="w-full h-full object-cover rounded-full bg-gray-100"
                     src={`${apiURL}/uploads/categories/${item.cImage}`}
                     alt={item.cName}
                   />
                 </div>
-                <div className="font-bold text-sm md:text-base text-gray-200 group-hover/card:text-orange-400 mt-4 text-center truncate w-full tracking-wide">
+                {/* Text explicitly set to Pure Black (#000000) */}
+                <div className="font-black text-sm md:text-base text-[#000000] mt-4 text-center truncate w-full tracking-wide">
                   {item.cName}
                 </div>
               </div>
             );
           })
         ) : (
-          <div className="text-sm text-gray-400 text-center w-full my-4">
+          <div className="text-sm font-extrabold text-[#000000] text-center w-full my-4">
             No Categories Available
           </div>
         )}
@@ -114,7 +116,7 @@ const CategoryList = () => {
         className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full shadow-xl transition-all duration-200 focus:outline-none ${
           canScrollRight
             ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:scale-110 cursor-pointer opacity-100 shadow-orange-500/30"
-            : "bg-gray-800 text-gray-600 cursor-not-allowed opacity-40"
+            : "bg-gray-300 text-gray-500 cursor-not-allowed opacity-40"
         }`}
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

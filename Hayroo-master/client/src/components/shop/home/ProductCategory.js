@@ -7,14 +7,15 @@ const ProductCategory = (props) => {
 
   return (
     <Fragment>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-4 rounded-2xl border border-gray-200/50 dark:border-gray-800/50 shadow-sm">
         {/* Title */}
-        <h2 className="text-xl md:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 tracking-wide uppercase">
+        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight uppercase flex items-center gap-2">
+          <span className="w-2 h-7 bg-orange-600 rounded-full inline-block"></span>
           Categories
         </h2>
 
         {/* Filter and Search Actions */}
-        <div className="flex items-center space-x-4 text-gray-700 text-sm md:text-base font-semibold">
+        <div className="flex items-center space-x-3 text-gray-900 dark:text-gray-100 font-extrabold text-sm md:text-base">
           <div
             onClick={() =>
               dispatch({
@@ -22,17 +23,17 @@ const ProductCategory = (props) => {
                 payload: !data.filterListDropdown,
               })
             }
-            className={`flex items-center space-x-1 cursor-pointer select-none hover:text-orange-600 transition-colors ${
-              data.filterListDropdown ? "text-orange-600 font-bold" : ""
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl cursor-pointer select-none border transition-all duration-300 ${
+              data.filterListDropdown
+                ? "bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-500/30 scale-105"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
             }`}
           >
-            <span>Filter</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            <span className="font-bold tracking-wide">Filter</span>
+            <svg className="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </div>
-
-          <span className="text-gray-300">|</span>
 
           <div
             onClick={() =>
@@ -41,13 +42,15 @@ const ProductCategory = (props) => {
                 payload: !data.searchDropdown,
               })
             }
-            className={`flex items-center space-x-1 cursor-pointer select-none hover:text-orange-600 transition-colors ${
-              data.searchDropdown ? "text-orange-600 font-bold" : ""
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl cursor-pointer select-none border transition-all duration-300 ${
+              data.searchDropdown
+                ? "bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-500/30 scale-105"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
             }`}
           >
-            <span>Search</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <span className="font-bold tracking-wide">Search</span>
+            <svg className="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
         </div>

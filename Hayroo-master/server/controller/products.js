@@ -1,4 +1,6 @@
 const productModel = require("../models/products");
+// Note: Assuming orderModel is located in ../models/orders, adjust path if your schema location differs
+const orderModel = require("../models/orders"); 
 const fs = require("fs");
 const path = require("path");
 
@@ -9,16 +11,16 @@ class Product {
       path.resolve(__dirname + "../../") + "/public/uploads/products/";
     console.log(basePath);
     for (var i = 0; i < images.length; i++) {
-    let rawName = mode == "file" ? images[i].filename : images[i];
+      let rawName = mode == "file" ? images[i].filename : images[i];
 
-       // Security fix: sanitize filename to prevent path traversal
-     let safeFileName = path.basename(rawName); 
-     let filePath = path.join(basePath, safeFileName);
+      // Security fix: sanitize filename to prevent path traversal
+      let safeFileName = path.basename(rawName); 
+      let filePath = path.join(basePath, safeFileName);
 
-    if(!filePath.startsWith(basePath)){
-      console.log("Block path traversal attempt" , rawName)
-      continue;
-    }
+      if (!filePath.startsWith(basePath)) {
+        console.log("Block path traversal attempt", rawName);
+        continue;
+      }
 
       fs.unlink(filePath, (err) => {
         if (err) {
@@ -279,49 +281,65 @@ class Product {
     if (!pId || !rating || !review || !uId) {
       return res.json({ error: "All filled must be required" });
     } else {
-      let checkReviewRatingExists = await productModel.findOne({ _id: pId });
-      if (checkReviewRatingExists.pRatingsReviews.length > 0) {
-        checkReviewRatingExists.pRatingsReviews.map((item) => {
-          if (item.user === uId) {
-            return res.json({ error: "Your already reviewd the product" });
-          } else {
-            try {
-              let newRatingReview = productModel.findByIdAndUpdate(pId, {
-                $push: {
-                  pRatingsReviews: {
-                    review: review,
-                    user: uId,
-                    rating: rating,
-                  },
-                },
-              });
-              newRatingReview.exec((err, result) => {
-                if (err) {
-                  console.log(err);
-                }
-                return res.json({ success: "Thanks for your review" });
-              });
-            } catch (err) {
-              return res.json({ error: "Cart product wrong" });
-            }
+      try {
+        // Check if the user has purchased this product and order is not cancelled
+        let isVerifiedPurchase = false;
+        if (orderModel) {
+          const orderExists = await orderModel.findOne({
+            user: uId,
+            "allProduct.id": pId,
+            status: { $ne: "Cancelled" }
+          });
+          if (orderExists) {
+            isVerifiedPurchase = true;
           }
-        });
-      } else {
-        try {
-          let newRatingReview = productModel.findByIdAndUpdate(pId, {
-            $push: {
-              pRatingsReviews: { review: review, user: uId, rating: rating },
-            },
-          });
-          newRatingReview.exec((err, result) => {
-            if (err) {
-              console.log(err);
-            }
-            return res.json({ success: "Thanks for your review" });
-          });
-        } catch (err) {
-          return res.json({ error: "Cart product wrong" });
         }
+
+        let checkReviewRatingExists = await productModel.findOne({ _id: pId });
+        
+        if (checkReviewRatingExists.pRatingsReviews.length > 0) {
+          // Check if user has already reviewed the product
+          let alreadyReviewed = checkReviewRatingExists.pRatingsReviews.some(
+            (item) => item.user && item.user.toString() === uId.toString()
+          );
+
+          if (alreadyReviewed) {
+            return res.json({ error: "Your already reviewd the product" });
+          }
+
+          let newRatingReview = await productModel.findByIdAndUpdate(pId, {
+            $push: {
+              pRatingsReviews: {
+                review: review,
+                user: uId,
+                rating: rating,
+                isVerified: isVerifiedPurchase
+              },
+            },
+          }, { new: true });
+
+          if (newRatingReview) {
+            return res.json({ success: "Thanks for your review" });
+          }
+        } else {
+          let newRatingReview = await productModel.findByIdAndUpdate(pId, {
+            $push: {
+              pRatingsReviews: { 
+                review: review, 
+                user: uId, 
+                rating: rating,
+                isVerified: isVerifiedPurchase
+              },
+            },
+          }, { new: true });
+
+          if (newRatingReview) {
+            return res.json({ success: "Thanks for your review" });
+          }
+        }
+      } catch (err) {
+        console.log(err);
+        return res.json({ error: "Cart product wrong" });
       }
     }
   }

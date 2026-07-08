@@ -70,3 +70,11 @@ label {
 .rating>input:checked~label:hover~label {
   color: #b7791f;
 }
+
+
+/* Clean styles for Product Details */
+fieldset,
+label {
+  margin: 0;
+  padding: 0;
+}
