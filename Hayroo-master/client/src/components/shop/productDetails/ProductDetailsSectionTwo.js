@@ -51,7 +51,7 @@ const RatingReview = () => {
         <ReviewForm />
       ) : (
         <div className="mb-12 md:mx-16 lg:mx-20 xl:mx-24 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 p-4 rounded-xl text-amber-800 dark:text-amber-200 text-center font-semibold">
-          🔒 You need to log in to leave a product review.
+          <span role="img" aria-label="star">⭐</span>
         </div>
       )}
     </Fragment>

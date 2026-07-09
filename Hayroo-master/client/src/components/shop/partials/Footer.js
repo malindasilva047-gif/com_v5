@@ -136,7 +136,7 @@ const Footer = () => {
           <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
             <p>&copy; {new Date().getFullYear()} Unlimite Pc House. All rights reserved.</p>
             <div className="flex space-x-4 mt-4 md:mt-0 items-center">
-              <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded text-slate-400 font-semibold">🔒 Braintree SSL Encrypted</span>
+              <span role="img" aria-label="heart" className="text-red-500">❤️</span>
             </div>
           </div>
         </div>

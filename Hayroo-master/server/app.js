@@ -1,5 +1,4 @@
 /* 
-
 ================== Most Important ==================
 * Issue 1 :
 In uploads folder you need create 3 folder like bellow.
@@ -13,7 +12,6 @@ controller then newUser obj, you will
 find a role field. role:1 for admin signup & 
 role: 0 or by default it for customer signup.
 go user model and see the role field.
-
 */
 
 const express = require("express");
@@ -32,9 +30,13 @@ const brainTreeRouter = require("./routes/braintree");
 const orderRouter = require("./routes/orders");
 const usersRouter = require("./routes/users");
 const customizeRouter = require("./routes/customize");
-// Import Auth middleware for check user login or not~
+
+// Import Auth middleware & Folder Script
 const { loginCheck } = require("./middleware/auth");
 const CreateAllFolder = require("./config/uploadFolderCreateScript");
+
+// Import Google Sheet Sync Module
+const { syncProductsFromSheet } = require("./config/excelSync");
 
 /* Create All Uploads Folder if not exists | For Uploading Images */
 CreateAllFolder();
@@ -45,13 +47,16 @@ mongoose
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useCreateIndex: true,
+    useFindAndModify: false,
   })
-  .then(() =>
+  .then(() => {
     console.log(
       "==============Mongodb Database Connected Successfully=============="
-    )
-  )
-  .catch((err) => console.log("Database Not Connected !!!"));
+    );
+    // Database එක Connect වූ පසු ප්‍රථම වරට Auto Sync එක ක්‍රියාත්මක කිරීම
+    syncProductsFromSheet();
+  })
+  .catch((err) => console.log("Database Not Connected !!!", err));
 
 // Middleware
 app.use(morgan("dev"));
@@ -70,8 +75,15 @@ app.use("/api", brainTreeRouter);
 app.use("/api/order", orderRouter);
 app.use("/api/customize", customizeRouter);
 
+const payhereRoute = require("./routes/payhere");
+
+// Middleware setup අසල:
+app.use("/api", payhereRoute);
+
 // Run Server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log("Server is running on ", PORT);
 });
+
+// Braintree route එක ඉවත් කර මෙය එකතු කරන්න:

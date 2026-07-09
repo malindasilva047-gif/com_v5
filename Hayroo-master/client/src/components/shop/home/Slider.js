@@ -47,7 +47,11 @@ const Slider = (props) => {
           <div className="relative w-full h-full">
             <img
               className="w-full h-full object-cover transition-transform duration-700 ease-out transform group-hover:scale-105"
-              src={`${apiURL}/uploads/customize/${data.sliderImages[slide].slideImage}`}
+              src={
+                data.sliderImages[slide]?.slideImage?.startsWith("http")
+                  ? data.sliderImages[slide].slideImage
+                  : `${apiURL}/uploads/customize/${data.sliderImages[slide]?.slideImage}`
+              }
               alt="Hero Tech Showcase"
             />
 
@@ -112,24 +116,42 @@ const Slider = (props) => {
         )}
       </div>
 
-      {/* Customer Reviews Section added right below the Slider */}
+      {/* Customer Reviews Section */}
       <div className="my-10 bg-gray-50 rounded-3xl p-8 border border-gray-200">
         <h2 className="text-xl md:text-2xl font-black text-black tracking-tight mb-6 uppercase">
           What Our Customers Say
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex text-amber-500 mb-2">⭐⭐⭐⭐⭐</div>
+            <div className="flex text-amber-500 mb-2">
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+            </div>
             <p className="text-sm text-gray-700 font-medium italic">"Best place in Sri Lanka to buy genuine custom PC components. Highly recommended!"</p>
             <div className="mt-4 font-black text-xs text-black uppercase tracking-wider">- Lakmal R.</div>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex text-amber-500 mb-2">⭐⭐⭐⭐⭐</div>
+            <div className="flex text-amber-500 mb-2">
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+            </div>
             <p className="text-sm text-gray-700 font-medium italic">"Extremely fast delivery and excellent customer support for warranty claims."</p>
             <div className="mt-4 font-black text-xs text-black uppercase tracking-wider">- Sachith D.</div>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex text-amber-500 mb-2">⭐⭐⭐⭐⭐</div>
+            <div className="flex text-amber-500 mb-2">
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+              <span role="img" aria-label="star">⭐</span>
+            </div>
             <p className="text-sm text-gray-700 font-medium italic">"The build quality of their pre-builts is incredibly neat. Clean wire management."</p>
             <div className="mt-4 font-black text-xs text-black uppercase tracking-wider">- Lahiru K.</div>
           </div>

@@ -1,3 +1,4 @@
+// C:\lakmal_code\com_v5\com_v5\Hayroo-master\client\src\components\shop\home\SingleProduct.js
 import React, { Fragment, useContext, useEffect, useState } from "react";
 import { useHistory } from "react-router-dom";
 import { HomeContext } from "./index";
@@ -17,6 +18,7 @@ const SingleProduct = () => {
     if (!products || products.length === 0) {
       fetchAllProducts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAllProducts = async () => {
@@ -58,7 +60,7 @@ const SingleProduct = () => {
         products.map((item, index) => {
           return (
             <div
-              key={index}
+              key={item._id || index}
               className="group bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-xl hover:border-orange-500 transition-all duration-300 flex flex-col justify-between transform hover:-translate-y-1 relative"
             >
               {/* Product Image */}
@@ -66,7 +68,13 @@ const SingleProduct = () => {
                 <img
                   onClick={() => history.push(`/products/${item._id}`)}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-                  src={`${apiURL}/uploads/products/${item.pImages[0]}`}
+                  src={
+                    item.pImages && item.pImages[0]
+                      ? item.pImages[0].startsWith("http")
+                        ? item.pImages[0]
+                        : `${apiURL}/uploads/products/${item.pImages[0]}`
+                      : "/placeholder.png"
+                  }
                   alt={item.pName}
                 />
 
@@ -106,7 +114,7 @@ const SingleProduct = () => {
               <div className="flex flex-col flex-grow justify-between">
                 <div>
                   <span className="text-xs font-extrabold text-black uppercase tracking-wider block mb-1">
-                    {item.pCategory ? item.pCategory.cName : "Hardware"}
+                    {item.pCategory?.cName || "Uncategorized"}
                   </span>
 
                   <h3
@@ -133,12 +141,17 @@ const SingleProduct = () => {
 
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                   <span className="text-lg font-black text-black">
-                    ${item.pPrice}
+                    Rs. {item.pPrice}
                   </span>
 
                   <button
                     onClick={() =>
-                      addToCart(item._id, item.pPrice, item.pQuantity, item.pImages[0])
+                      addToCart(
+                        item._id,
+                        item.pPrice,
+                        item.pQuantity,
+                        item.pImages ? item.pImages[0] : ""
+                      )
                     }
                     className="bg-black hover:bg-orange-500 text-white font-bold px-3 py-2 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center space-x-1"
                   >
