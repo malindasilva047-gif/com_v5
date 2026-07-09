@@ -1,6 +1,12 @@
 export const isWish = (id, wList) => {
-  // Guard clause to ensure wList is initialized and is an array
-  if (wList && Array.isArray(wList) && wList.includes(id) === true) {
+  // Safe guard: If wList is not a valid array, fetch it directly from localStorage
+  let list = Array.isArray(wList)
+    ? wList
+    : localStorage.getItem("wishList")
+    ? JSON.parse(localStorage.getItem("wishList"))
+    : [];
+
+  if (list && Array.isArray(list) && list.includes(id) === true) {
     return true;
   }
   return false;
@@ -14,12 +20,12 @@ export const isWishReq = (e, id, setWlist) => {
     if (list.includes(id) !== true) {
       list.push(id);
       localStorage.setItem("wishList", JSON.stringify(list));
-      setWlist(list);
+      if (typeof setWlist === "function") setWlist(list);
     }
   } else {
     list.push(id);
     localStorage.setItem("wishList", JSON.stringify(list));
-    setWlist(list);
+    if (typeof setWlist === "function") setWlist(list);
   }
 };
 
@@ -31,7 +37,7 @@ export const unWishReq = (e, id, setWlist) => {
     if (list.includes(id) === true) {
       list.splice(list.indexOf(id), 1);
       localStorage.setItem("wishList", JSON.stringify(list));
-      setWlist(list);
+      if (typeof setWlist === "function") setWlist(list);
     }
   }
 };
@@ -57,7 +63,7 @@ export const totalCost = () => {
   let cart = JSON.parse(localStorage.getItem("cart")) || []; 
   if (cart.length > 0) {
     cart.forEach((item) => {
-      total += item.price * item.quantity;
+      total += (item.price || 0) * (item.quantity || item.quantitiy || 0);
     });
   }
   return total;

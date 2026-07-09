@@ -1,25 +1,57 @@
-import React, { Fragment, useEffect, useContext, useState } from "react";
+// C:\lakmal_code\com_v5\com_v5\Hayroo-master\client\src\components\shop\order\CheckoutProducts.js
+import React, { Fragment, useEffect, useContext, useState, useRef } from "react";
 import { useHistory } from "react-router-dom";
 import { LayoutContext } from "../layout";
-import { subTotal, quantity, totalCost } from "../partials/Mixins";
+import { subTotal, quantity } from "../partials/Mixins";
 
 import { cartListProduct } from "../partials/FetchApi";
 import { createOrder, getPayHereHash } from "./FetchApi";
 import { fetchData } from "./Action";
 
-const apiURL = process.env.REACT_APP_API_URL;
+const apiURL = process.env.REACT_APP_API_URL || "";
 
-export const CheckoutComponent = (props) => {
+export const CheckoutComponent = () => {
   const history = useHistory();
   const { data, dispatch } = useContext(LayoutContext);
 
-  const [state, setState] = useState({
-    address: "",
-    phone: "",
-    error: false,
-    success: false,
-  });
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
+  // Calculate live total based on fetched products array and local quantities
+  const calculateCartTotal = () => {
+    let total = 0;
+    const products = data?.cartProduct || [];
+    products.forEach((product) => {
+      const qty = quantity(product._id);
+      const price = parseFloat(product.pPrice || product.price || 0);
+      if (!isNaN(qty) && !isNaN(price)) {
+        total += qty * price;
+      }
+    });
+    return total;
+  };
+
+  const calculatedTotal = calculateCartTotal();
+
+  const addressRef = useRef(address);
+  const phoneRef = useRef(phone);
+  const totalRef = useRef(calculatedTotal);
+
+  useEffect(() => {
+    addressRef.current = address;
+  }, [address]);
+
+  useEffect(() => {
+    phoneRef.current = phone;
+  }, [phone]);
+
+  useEffect(() => {
+    totalRef.current = calculatedTotal;
+  }, [calculatedTotal]);
+
+  // Initial Data Load (Runs ONLY ONCE on mount)
   useEffect(() => {
     fetchData(cartListProduct, dispatch);
 
@@ -27,101 +59,127 @@ export const CheckoutComponent = (props) => {
     if (window.payhere) {
       window.payhere.onCompleted = function onCompleted(orderId) {
         console.log("Payment completed. OrderID:" + orderId);
-        
-        // Save Order to Database after successful payment
+
         const jwt = JSON.parse(localStorage.getItem("jwt"));
         const orderData = {
-          allProduct: data.cartProduct,
+          allProduct: data?.cartProduct || [],
           user: jwt ? jwt.user._id : null,
-          amount: totalCost(),
+          amount: totalRef.current,
           transactionId: orderId,
-          address: state.address,
-          phone: state.phone,
+          address: addressRef.current,
+          phone: phoneRef.current,
         };
 
-        createOrder(orderData).then((res) => {
-          localStorage.removeItem("cart");
-          dispatch({ type: "cartProduct", payload: null });
-          history.push("/user/orders");
-        });
+        createOrder(orderData)
+          .then(() => {
+            localStorage.removeItem("cart");
+            dispatch({ type: "cartProduct", payload: null });
+            dispatch({ type: "inCart", payload: null });
+            history.push("/user/orders");
+          })
+          .catch((err) => {
+            console.error("Order creation error:", err);
+            setError("Failed to record order. Please contact support.");
+          });
       };
 
       window.payhere.onDismissed = function onDismissed() {
         console.log("Payment dismissed");
+        setIsProcessing(false);
       };
 
-      window.payhere.onError = function onError(error) {
-        console.log("Error:" + error);
-        setState({ ...state, error: "Payment failed. Please try again." });
+      window.payhere.onError = function onError(err) {
+        console.log("PayHere Error:", err);
+        setError("Payment failed. Please try again.");
+        setIsProcessing(false);
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.address, state.phone]);
+  }, []);
 
-  const handlePayHerePayment = async () => {
-    if (!state.address || !state.phone) {
-      setState({ ...state, error: "Please provide both delivery address and phone number." });
+  const handlePayHerePayment = async (e) => {
+    if (e) e.preventDefault();
+
+    if (!address.trim() || !phone.trim()) {
+      setError("Please provide both delivery address and phone number.");
       return;
     }
+
+    if (calculatedTotal <= 0) {
+      setError("Your cart total is invalid or empty.");
+      return;
+    }
+
+    setError(false);
+    setIsProcessing(true);
 
     const jwt = JSON.parse(localStorage.getItem("jwt"));
     const user = jwt ? jwt.user : {};
     const orderId = "ORD_" + new Date().getTime();
 
-    // Prepare Payment Data for PayHere
     const paymentReq = {
       order_id: orderId,
       items: "Order Checkout",
-      amount: totalCost(),
+      amount: calculatedTotal,
       currency: "LKR",
       first_name: user.name || "Customer",
       last_name: "",
       email: user.email || "customer@example.com",
-      phone: state.phone,
-      address: state.address,
+      phone: phone,
+      address: address,
       city: "Colombo",
       country: "Sri Lanka",
     };
 
-    // Get Merchant ID & Hash from backend API
-    const hashRes = await getPayHereHash(paymentReq);
+    try {
+      const hashRes = await getPayHereHash(paymentReq);
 
-    if (hashRes && hashRes.hash) {
-      const payment = {
-        sandbox: true, // Live go-live වෙද්දි false කරන්න
-        merchant_id: hashRes.merchant_id,
-        return_url: undefined,
-        cancel_url: undefined,
-        notify_url: `${apiURL}/api/payhere/notify`,
-        order_id: orderId,
-        items: "Order Checkout",
-        amount: totalCost(),
-        currency: "LKR",
-        hash: hashRes.hash,
-        first_name: user.name || "Customer",
-        last_name: "",
-        email: user.email || "customer@example.com",
-        phone: state.phone,
-        address: state.address,
-        city: "Colombo",
-        country: "Sri Lanka",
-      };
+      if (hashRes && hashRes.hash) {
+        const payment = {
+          sandbox: true, // Set to false in production
+          merchant_id: hashRes.merchant_id,
+          return_url: undefined,
+          cancel_url: undefined,
+          notify_url: `${apiURL}/api/payhere/notify`,
+          order_id: orderId,
+          items: "Order Checkout",
+          amount: calculatedTotal,
+          currency: "LKR",
+          hash: hashRes.hash,
+          first_name: user.name || "Customer",
+          last_name: "",
+          email: user.email || "customer@example.com",
+          phone: phone,
+          address: address,
+          city: "Colombo",
+          country: "Sri Lanka",
+        };
 
-      window.payhere.startPayment(payment);
-    } else {
-      setState({ ...state, error: "Failed to initialize payment hash from server." });
+        if (window.payhere) {
+          window.payhere.startPayment(payment);
+        } else {
+          setError("PayHere gateway script not loaded. Please refresh the page.");
+          setIsProcessing(false);
+        }
+      } else {
+        setError("Failed to initialize payment hash from server.");
+        setIsProcessing(false);
+      }
+    } catch (err) {
+      console.error("PayHere Hash Error:", err);
+      setError("Server connection failed. Please try again.");
+      setIsProcessing(false);
     }
   };
 
-  if (data.loading) {
+  if (data?.loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen space-y-4">
         <svg
-          className="w-12 h-12 animate-spin text-gray-600"
+          className="w-12 h-12 animate-spin text-yellow-600"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -130,76 +188,96 @@ export const CheckoutComponent = (props) => {
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
           ></path>
         </svg>
-        Please wait...
+        <span className="text-gray-600 font-semibold text-sm">Loading Order Details...</span>
       </div>
     );
   }
 
   return (
     <Fragment>
-      <section className="mx-4 mt-20 md:mx-12 md:mt-32 lg:mt-24">
-        <div className="text-2xl mx-2">Order</div>
-        <div className="flex flex-col md:flex md:space-x-2 md:flex-row">
-          <div className="md:w-1/2">
-            <CheckoutProducts products={data.cartProduct} />
+      <section className="mx-4 my-8 md:mx-12 md:my-12">
+        <h1 className="text-3xl font-extrabold text-gray-900 mb-8 border-b pb-4">
+          Checkout Order
+        </h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column: Products List */}
+          <div className="lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Items in Order</h2>
+            <CheckoutProducts products={data?.cartProduct || []} />
           </div>
-          <div className="w-full order-first md:order-last md:w-1/2">
-            <div className="p-4 md:p-8">
-              {state.error && (
-                <div className="bg-red-200 text-red-700 py-2 px-4 rounded mb-4">
-                  {state.error}
+
+          {/* Right Column: Customer Details & Payment */}
+          <div className="lg:col-span-5">
+            <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 sticky top-24">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Delivery Details</h2>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm py-3 px-4 rounded-xl mb-4 font-medium flex items-center space-x-2">
+                  <span>⚠️</span>
+                  <span>{error}</span>
                 </div>
               )}
-              <div className="flex flex-col py-2">
-                <label htmlFor="address" className="pb-2">
-                  Delivery Address
-                </label>
-                <input
-                  value={state.address}
-                  onChange={(e) =>
-                    setState({
-                      ...state,
-                      address: e.target.value,
-                      error: false,
-                    })
-                  }
-                  type="text"
-                  id="address"
-                  className="border px-4 py-2"
-                  placeholder="Address..."
-                />
-              </div>
-              <div className="flex flex-col py-2 mb-4">
-                <label htmlFor="phone" className="pb-2">
-                  Phone
-                </label>
-                <input
-                  value={state.phone}
-                  onChange={(e) =>
-                    setState({
-                      ...state,
-                      phone: e.target.value,
-                      error: false,
-                    })
-                  }
-                  type="text"
-                  id="phone"
-                  className="border px-4 py-2"
-                  placeholder="+94..."
-                />
-              </div>
-              
-              <div className="text-xl font-bold py-2">
-                Total: LKR {totalCost()}.00
-              </div>
 
-              <div
-                onClick={handlePayHerePayment}
-                className="w-full px-4 py-3 text-center text-white font-semibold cursor-pointer rounded mt-4"
-                style={{ background: "#303031" }}
-              >
-                Pay with PayHere
-              </div>
+              <form onSubmit={handlePayHerePayment} className="space-y-4">
+                <div>
+                  <label htmlFor="address" className="block text-xs font-bold uppercase text-gray-600 tracking-wider mb-2">
+                    Delivery Address
+                  </label>
+                  <textarea
+                    id="address"
+                    rows={3}
+                    value={address}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (error) setError(false);
+                    }}
+                    placeholder="Enter complete house address, street, town..."
+                    className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:border-yellow-600 focus:ring-1 focus:ring-yellow-600 transition"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="phone" className="block text-xs font-bold uppercase text-gray-600 tracking-wider mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    id="phone"
+                    type="text"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      if (error) setError(false);
+                    }}
+                    placeholder="077XXXXXXX or +9477XXXXXXX"
+                    className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:border-yellow-600 focus:ring-1 focus:ring-yellow-600 transition"
+                  />
+                </div>
+
+                {/* Pricing Summary */}
+                <div className="border-t border-gray-100 pt-4 mt-6 space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Subtotal</span>
+                    <span>LKR {calculatedTotal.toLocaleString("en-LK")}.00</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Delivery Charge</span>
+                    <span className="text-emerald-600 font-semibold">Calculated on dispatch</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-extrabold text-gray-900 border-t border-gray-100 pt-3 mt-2">
+                    <span>Total Amount</span>
+                    <span className="text-yellow-700">LKR {calculatedTotal.toLocaleString("en-LK")}.00</span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isProcessing || calculatedTotal <= 0}
+                  className="w-full rounded-xl bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-4 transition active:scale-[0.98] shadow-lg shadow-yellow-600/20 uppercase text-sm tracking-wider mt-6 disabled:opacity-50"
+                >
+                  {isProcessing ? "Processing Payment..." : "Pay with PayHere"}
+                </button>
+              </form>
             </div>
           </div>
         </div>
@@ -208,47 +286,69 @@ export const CheckoutComponent = (props) => {
   );
 };
 
-const CheckoutProducts = ({ products }) => {
+export const CheckoutProducts = ({ products }) => {
   const history = useHistory();
 
+  const getImageUrl = (imageName) => {
+    if (!imageName) return "/placeholder.png";
+    if (imageName.startsWith("http://") || imageName.startsWith("https://")) {
+      return imageName;
+    }
+    return `${apiURL}/uploads/products/${imageName}`;
+  };
+
+  if (!products || products.length === 0) {
+    return (
+      <div className="py-8 text-center text-gray-500 font-medium">
+        No items found in cart for checkout.
+      </div>
+    );
+  }
+
   return (
-    <Fragment>
-      <div className="grid grid-cols-2 md:grid-cols-1">
-        {products !== null && products.length > 0 ? (
-          products.map((product, index) => {
-            return (
+    <div className="divide-y divide-gray-100">
+      {products.map((product, index) => {
+        const itemQty = quantity(product._id);
+        const itemSubTotal = subTotal(product._id, product.pPrice);
+
+        return (
+          <div key={index} className="py-4 flex items-center justify-between space-x-4">
+            <div className="flex items-center space-x-4">
               <div
-                key={index}
-                className="col-span-1 m-2 md:py-6 md:border-t md:border-b md:my-2 md:mx-0 md:flex md:items-center md:justify-between"
+                onClick={() => history.push(`/products/${product._id}`)}
+                className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer flex-shrink-0 bg-gray-50 flex items-center justify-center hover:opacity-80 transition"
               >
-                <div className="md:flex md:items-center md:space-x-4">
-                  <img
-                    onClick={(e) => history.push(`/products/${product._id}`)}
-                    className="cursor-pointer md:h-20 md:w-20 object-cover object-center"
-                    src={`${apiURL}/uploads/products/${product.pImages[0]}`}
-                    alt="wishListproduct"
-                  />
-                  <div className="text-lg md:ml-6 truncate">
-                    {product.pName}
-                  </div>
-                  <div className="md:ml-6 font-semibold text-gray-600 text-sm">
-                    Price : LKR {product.pPrice}.00{" "}
-                  </div>
-                  <div className="md:ml-6 font-semibold text-gray-600 text-sm">
-                    Quantity : {quantity(product._id)}
-                  </div>
-                  <div className="font-semibold text-gray-600 text-sm">
-                    Subtotal : LKR {subTotal(product._id, product.pPrice)}.00
-                  </div>
+                <img
+                  className="max-h-full max-w-full object-contain"
+                  src={getImageUrl(product.pImages?.[0])}
+                  alt={product.pName || "Product"}
+                />
+              </div>
+
+              <div>
+                <h3
+                  onClick={() => history.push(`/products/${product._id}`)}
+                  className="font-bold text-gray-800 text-base cursor-pointer hover:text-yellow-600 transition line-clamp-1"
+                >
+                  {product.pName}
+                </h3>
+                <div className="text-xs text-gray-500 mt-0.5 space-x-2">
+                  <span>Price: LKR {parseFloat(product.pPrice || 0).toLocaleString("en-LK")}.00</span>
+                  <span>•</span>
+                  <span>Qty: {itemQty}</span>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <div>No product found for checkout</div>
-        )}
-      </div>
-    </Fragment>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              <span className="text-sm font-extrabold text-gray-900">
+                LKR {parseFloat(itemSubTotal || 0).toLocaleString("en-LK")}.00
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 };
 

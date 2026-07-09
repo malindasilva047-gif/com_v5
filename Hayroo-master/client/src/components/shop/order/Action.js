@@ -1,3 +1,4 @@
+// C:\lakmal_code\com_v5\com_v5\Hayroo-master\client\src\components\shop\order\Action.js
 import { createOrder } from "./FetchApi";
 
 export const fetchData = async (cartListProduct, dispatch) => {
@@ -5,28 +6,29 @@ export const fetchData = async (cartListProduct, dispatch) => {
   try {
     let responseData = await cartListProduct();
     if (responseData && responseData.Products) {
-      setTimeout(function () {
-        dispatch({ type: "cartProduct", payload: responseData.Products });
-        dispatch({ type: "loading", payload: false });
-      }, 1000);
+      dispatch({ type: "cartProduct", payload: responseData.Products });
+    } else {
+      dispatch({ type: "cartProduct", payload: [] });
     }
   } catch (error) {
-    console.log(error);
+    console.error("Cart fetch error:", error);
+    dispatch({ type: "cartProduct", payload: [] });
+  } finally {
+    dispatch({ type: "loading", payload: false });
   }
 };
 
 export const fetchbrainTree = async (getBrainTreeToken, setState) => {
   try {
     let responseData = await getBrainTreeToken();
-    if (responseData && responseData) {
+    if (responseData) {
       setState({
         clientToken: responseData.clientToken,
         success: responseData.success,
       });
-      console.log(responseData);
     }
   } catch (error) {
-    console.log(error);
+    console.error("BrainTree Token Error:", error);
   }
 };
 
@@ -39,7 +41,6 @@ export const pay = async (
   totalCost,
   history
 ) => {
-  console.log(state);
   if (!state.address) {
     setState({ ...state, error: "Please provide your address" });
   } else if (!state.phone) {
@@ -59,8 +60,8 @@ export const pay = async (
           .then(async (res) => {
             if (res) {
               let orderData = {
-                allProduct: JSON.parse(localStorage.getItem("cart")),
-                user: JSON.parse(localStorage.getItem("jwt")).user._id,
+                allProduct: JSON.parse(localStorage.getItem("cart")) || [],
+                user: JSON.parse(localStorage.getItem("jwt"))?.user?._id,
                 amount: res.transaction.amount,
                 transactionId: res.transaction.id,
                 address: state.address,
@@ -69,7 +70,7 @@ export const pay = async (
               try {
                 let resposeData = await createOrder(orderData);
                 if (resposeData.success) {
-                  localStorage.setItem("cart", JSON.stringify([]));
+                  localStorage.removeItem("cart");
                   dispatch({ type: "cartProduct", payload: null });
                   dispatch({ type: "cartTotalCost", payload: null });
                   dispatch({ type: "orderSuccess", payload: true });
@@ -77,19 +78,19 @@ export const pay = async (
                   dispatch({ type: "loading", payload: false });
                   return history.push("/");
                 } else if (resposeData.error) {
-                  console.log(resposeData.error);
+                  console.error(resposeData.error);
                 }
               } catch (error) {
-                console.log(error);
+                console.error("Order completion error:", error);
               }
             }
           })
           .catch((err) => {
-            console.log(err);
+            console.error("Payment processing error:", err);
           });
       })
       .catch((error) => {
-        console.log(error);
+        console.error("Payment method error:", error);
         setState({ ...state, error: error.message });
       });
   }

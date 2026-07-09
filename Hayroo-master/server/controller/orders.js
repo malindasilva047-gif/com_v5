@@ -138,6 +138,5 @@ class Order {
     }
   }
 }
-
 const ordersController = new Order();
 module.exports = ordersController;

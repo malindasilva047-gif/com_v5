@@ -1,5 +1,6 @@
+// C:\lakmal_code\com_v5\com_v5\Hayroo-master\client\src\components\shop\productDetails\ProductDetailsSection.js
 import React, { Fragment, useState, useEffect, useContext } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useHistory } from "react-router-dom"; // Updated for React Router v5
 import { ProductDetailsContext } from "./index";
 import { LayoutContext } from "../layout";
 import Submenu from "./Submenu";
@@ -9,78 +10,115 @@ import { getSingleProduct } from "./FetchApi";
 import { cartListProduct } from "../partials/FetchApi";
 
 import { isWishReq, unWishReq, isWish } from "../home/Mixins";
-import { updateQuantity, slideImage, addToCart, cartList } from "./Mixins";
-import { totalCost } from "../partials/Mixins";
+import { slideImage, cartList } from "./Mixins";
 
-const apiURL = process.env.REACT_APP_API_URL;
+// Safe fallback for process.env in Webpack 5 / modern bundlers
+const apiURL = (typeof process !== "undefined" && process.env && process.env.REACT_APP_API_URL) 
+  ? process.env.REACT_APP_API_URL 
+  : "";
 
-const ProductDetailsSection = (props) => {
+const ProductDetailsSection = () => {
   let { id } = useParams();
+  const history = useHistory(); // Replaced useNavigate with useHistory
 
   const { data, dispatch } = useContext(ProductDetailsContext);
-  const { data: layoutData, dispatch: layoutDispatch } =
-    useContext(LayoutContext); // Layout Context
+  const { data: layoutData, dispatch: layoutDispatch } = useContext(LayoutContext);
 
-  const sProduct = layoutData.singleProductDetail;
-  const [pImages, setPimages] = useState(null);
-  const [count, setCount] = useState(0); // Slide change state
-
-  const [quantitiy, setQuantitiy] = useState(1); // Increse and decrese quantity state
-  const [, setAlertq] = useState(false); // Alert when quantity greater than stock
-
-  const [wList, setWlist] = useState(
-    JSON.parse(localStorage.getItem("wishList"))
-  ); // Wishlist State Control
+  const sProduct = layoutData?.singleProductDetail;
+  const [pImages, setPimages] = useState([]);
+  const [count, setCount] = useState(0); 
+  const [quantity, setQuantity] = useState(1); 
+  const [wList, setWlist] = useState([]); 
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    try {
+      const storedWish = JSON.parse(localStorage.getItem("wishList"));
+      setWlist(Array.isArray(storedWish) ? storedWish : []);
+    } catch (e) {
+      setWlist([]);
+    }
   }, []);
+
+  useEffect(() => {
+    if (id) {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const fetchData = async () => {
     dispatch({ type: "loading", payload: true });
     try {
       let responseData = await getSingleProduct(id);
-      setTimeout(() => {
-        if (responseData.Product) {
-          layoutDispatch({
-            type: "singleProductDetail",
-            payload: responseData.Product,
-          }); // Dispatch in layout context
-          setPimages(responseData.Product.pImages);
-          dispatch({ type: "loading", payload: false });
-          layoutDispatch({ type: "inCart", payload: cartList() }); // This function change cart in cart state
-        }
-        if (responseData.error) {
-          console.log(responseData.error);
-        }
-      }, 500);
+      if (responseData && responseData.Product) {
+        layoutDispatch({
+          type: "singleProductDetail",
+          payload: responseData.Product,
+        });
+        setPimages(responseData.Product.pImages || []);
+        layoutDispatch({ type: "inCart", payload: cartList() });
+      }
     } catch (error) {
-      console.log(error);
+      console.error("Error fetching single product:", error);
+    } finally {
+      dispatch({ type: "loading", payload: false });
     }
-    fetchCartProduct(); // Updating cart total
+
+    await fetchCartProduct();
   };
 
   const fetchCartProduct = async () => {
     try {
       let responseData = await cartListProduct();
       if (responseData && responseData.Products) {
-        layoutDispatch({ type: "cartProduct", payload: responseData.Products }); // Layout context Cartproduct fetch and dispatch
+        layoutDispatch({ type: "cartProduct", payload: responseData.Products });
       }
     } catch (error) {
-      console.log(error);
+      console.error("Error fetching cart products:", error);
     }
   };
 
-  if (data.loading) {
+  const getImageUrl = (imageName) => {
+    if (!imageName) return "/placeholder.png";
+    if (imageName.startsWith("http://") || imageName.startsWith("https://")) {
+      return imageName;
+    }
+    return `${apiURL}/uploads/products/${imageName}`;
+  };
+
+  const handleAddToCart = () => {
+    if (!sProduct) return;
+
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    let index = cart.findIndex((item) => item.id === sProduct._id);
+
+    if (index !== -1) {
+      cart[index].quantitiy = quantity;
+    } else {
+      cart.push({
+        id: sProduct._id,
+        quantitiy: quantity,
+        price: sProduct.pPrice,
+      });
+    }
+
+    localStorage.setItem("cart", JSON.stringify(cart));
+
+    const inCartIds = cart.map((item) => item.id);
+    layoutDispatch({ type: "inCart", payload: inCartIds });
+    layoutDispatch({ type: "cartTotalCost", payload: true });
+    
+    fetchCartProduct();
+  };
+
+  if (data?.loading || !sProduct) {
     return (
       <div className="col-span-2 md:col-span-3 lg:col-span-4 flex items-center justify-center h-screen">
         <svg
-          className="w-12 h-12 animate-spin text-gray-600"
+          className="w-12 h-12 animate-spin text-yellow-600"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -91,104 +129,89 @@ const ProductDetailsSection = (props) => {
         </svg>
       </div>
     );
-  } else if (!sProduct) {
-    return <div>No product</div>;
   }
+
+  const mainImage = sProduct.pImages?.[count] || sProduct.pImages?.[0] || "";
+  const subTotal = (sProduct.pPrice || 0) * quantity;
+  const isInCart = Array.isArray(layoutData?.inCart) && layoutData.inCart.includes(sProduct._id);
+
   return (
     <Fragment>
       <Submenu
         value={{
-          categoryId: sProduct.pCategory._id,
-          product: sProduct.pName,
-          category: sProduct.pCategory.cName,
+          categoryId: sProduct.pCategory?._id || "",
+          product: sProduct.pName || "",
+          category: sProduct.pCategory?.cName || "Category",
         }}
       />
-      <section className="m-4 md:mx-12 md:my-6">
-        <div className="grid grid-cols-2 md:grid-cols-12">
-          <div className="hidden md:block md:col-span-1 md:flex md:flex-col md:space-y-4 md:mr-2">
-            <img
-              onClick={(e) =>
-                slideImage("increase", 0, count, setCount, pImages)
-              }
-              className={`${
-                count === 0 ? "" : "opacity-25"
-              } cursor-pointer w-20 h-20 object-cover object-center`}
-              src={`${apiURL}/uploads/products/${sProduct.pImages[0]}`}
-              alt="pic"
-            />
-            <img
-              onClick={(e) =>
-                slideImage("increase", 1, count, setCount, pImages)
-              }
-              className={`${
-                count === 1 ? "" : "opacity-25"
-              } cursor-pointer w-20 h-20 object-cover object-center`}
-              src={`${apiURL}/uploads/products/${sProduct.pImages[1]}`}
-              alt="pic"
-            />
+      
+      <section className="m-4 md:mx-12 md:my-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          
+          {/* Thumbnails Gallery */}
+          <div className="hidden md:flex md:col-span-1 flex-col space-y-3">
+            {sProduct.pImages &&
+              sProduct.pImages.map((img, idx) => (
+                <img
+                  key={idx}
+                  onClick={() => slideImage("increase", idx, count, setCount, pImages)}
+                  className={`${
+                    count === idx ? "border-yellow-600 border-2 shadow-md opacity-100" : "opacity-60 hover:opacity-100 border-gray-200"
+                  } cursor-pointer w-20 h-20 object-contain object-center border rounded-lg bg-gray-50 transition`}
+                  src={getImageUrl(img)}
+                  alt="thumbnail"
+                />
+              ))}
           </div>
-          <div className="col-span-2 md:col-span-7">
-            <div className="relative">
+
+          {/* Main Display Image */}
+          <div className="col-span-1 md:col-span-6">
+            <div className="relative border border-gray-200 rounded-xl overflow-hidden bg-white p-4 h-[420px] flex items-center justify-center">
               <img
-                className="w-full"
-                src={`${apiURL}/uploads/products/${sProduct.pImages[count]}`}
-                alt="Pic"
+                className="max-h-full max-w-full object-contain"
+                src={getImageUrl(mainImage)}
+                alt={sProduct.pName || "Product"}
               />
-              <div className="absolute inset-0 flex justify-between items-center mb-4">
-                <svg
-                  onClick={(e) =>
-                    slideImage("increase", null, count, setCount, pImages)
-                  }
-                  className="flex justify-center  w-12 h-12 text-gray-700 opacity-25 cursor-pointer hover:text-yellow-700 hover:opacity-100"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                <svg
-                  onClick={(e) =>
-                    slideImage("increase", null, count, setCount, pImages)
-                  }
-                  className="flex justify-center  w-12 h-12 text-gray-700 opacity-25 cursor-pointer hover:text-yellow-700 hover:opacity-100"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </div>
+              {pImages.length > 1 && (
+                <div className="absolute inset-0 flex justify-between items-center px-2 pointer-events-none">
+                  <button
+                    onClick={() => slideImage("decrease", null, count, setCount, pImages)}
+                    className="pointer-events-auto p-2 rounded-full bg-white/80 text-gray-800 shadow-md hover:bg-white transition"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => slideImage("increase", null, count, setCount, pImages)}
+                    className="pointer-events-auto p-2 rounded-full bg-white/80 text-gray-800 shadow-md hover:bg-white transition"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          <div className="col-span-2 mt-8 md:mt-0 md:col-span-4 md:ml-6 lg:ml-12">
-            <div className="flex flex-col leading-8">
-              <div className="text-2xl tracking-wider">{sProduct.pName}</div>
-              <div className="flex justify-between items-center">
-                <span className="text-xl tracking-wider text-yellow-700">
-                  ${sProduct.pPrice}.00
-                </span>
-                <span>
+
+          {/* Details Column */}
+          <div className="col-span-1 md:col-span-5 flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start">
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 leading-snug">
+                  {sProduct.pName}
+                </h1>
+                
+                <button className="p-2 rounded-full hover:bg-gray-100 transition">
                   <svg
                     onClick={(e) => isWishReq(e, sProduct._id, setWlist)}
                     className={`${
                       isWish(sProduct._id, wList) && "hidden"
-                    } w-5 h-5 md:w-6 md:h-6 cursor-pointer text-yellow-700`}
+                    } w-6 h-6 cursor-pointer text-gray-400 hover:text-red-500`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
                   >
                     <path
                       strokeLinecap="round"
@@ -201,10 +224,9 @@ const ProductDetailsSection = (props) => {
                     onClick={(e) => unWishReq(e, sProduct._id, setWlist)}
                     className={`${
                       !isWish(sProduct._id, wList) && "hidden"
-                    } w-5 h-5 md:w-6 md:h-6 cursor-pointer text-yellow-700`}
+                    } w-6 h-6 cursor-pointer text-red-500`}
                     fill="currentColor"
                     viewBox="0 0 20 20"
-                    xmlns="http://www.w3.org/2000/svg"
                   >
                     <path
                       fillRule="evenodd"
@@ -212,215 +234,112 @@ const ProductDetailsSection = (props) => {
                       clipRule="evenodd"
                     />
                   </svg>
-                </span>
+                </button>
               </div>
-            </div>
-            <div className="my-4 md:my-6 text-gray-600">
-              {sProduct.pDescription}
-            </div>
-            <div className="my-4 md:my-6">
-              {+quantitiy === +sProduct.pQuantity ? (
-                <span className="text-xs text-red-500">Stock limited</span>
-              ) : (
-                ""
-              )}
-              <div
-                className={`flex justify-between items-center px-4 py-2 border ${
-                  +quantitiy === +sProduct.pQuantity && "border-red-500"
-                }`}
-              >
-                <div
-                  className={`${
-                    quantitiy === sProduct.pQuantity && "text-red-500"
-                  }`}
-                >
-                  Quantity
+
+              {/* Dynamic Subtotal Price */}
+              <div className="my-4 border-y border-gray-100 py-3">
+                <div className="flex items-baseline space-x-3">
+                  <span className="text-3xl font-black text-yellow-700">
+                    LKR {subTotal.toLocaleString("en-LK")}.00
+                  </span>
+                  {quantity > 1 && (
+                    <span className="text-sm font-medium text-gray-500">
+                      (LKR {sProduct.pPrice?.toLocaleString("en-LK")} × {quantity})
+                    </span>
+                  )}
                 </div>
-                {/* Quantity Button */}
-                {sProduct.pQuantity !== 0 ? (
-                  <Fragment>
-                    {layoutData.inCart == null ||
-                    (layoutData.inCart !== null &&
-                      layoutData.inCart.includes(sProduct._id) === false) ? (
-                      <div className="flex items-center space-x-2">
-                        <span
-                          onClick={(e) =>
-                            updateQuantity(
-                              "decrease",
-                              sProduct.pQuantity,
-                              quantitiy,
-                              setQuantitiy,
-                              setAlertq
-                            )
-                          }
-                        >
-                          <svg
-                            className="w-5 h-5 fill-current cursor-pointer"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                        <span className="font-semibold">{quantitiy}</span>
-                        <span
-                          onClick={(e) =>
-                            updateQuantity(
-                              "increase",
-                              sProduct.pQuantity,
-                              quantitiy,
-                              setQuantitiy,
-                              setAlertq
-                            )
-                          }
-                        >
-                          <svg
-                            className="w-5 h-5 fill-current cursor-pointer"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <span>
-                          <svg
-                            className="w-5 h-5 fill-current cursor-not-allowed"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                        <span className="font-semibold">{quantitiy}</span>
-                        <span>
-                          <svg
-                            className="w-5 h-5 fill-current cursor-not-allowed"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                      </div>
-                    )}
-                  </Fragment>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <span>
-                      <svg
-                        className="w-5 h-5 fill-current cursor-not-allowed"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </span>
-                    <span className="font-semibold">{quantitiy}</span>
-                    <span>
-                      <svg
-                        className="w-5 h-5 fill-current cursor-not-allowed"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </span>
-                  </div>
-                )}
-                {/* Quantity Button End */}
               </div>
-              {/* Incart and out of stock button */}
-              {sProduct.pQuantity !== 0 ? (
-                <Fragment>
-                  {layoutData.inCart !== null &&
-                  layoutData.inCart.includes(sProduct._id) === true ? (
-                    <div
-                      style={{ background: "#303031" }}
-                      className={`px-4 py-2 text-white text-center cursor-not-allowed uppercase opacity-75`}
-                    >
-                      In cart
-                    </div>
+
+              <p className="my-4 text-sm text-gray-600 leading-relaxed">
+                {sProduct.pDescription}
+              </p>
+
+              {/* Quantity Selector */}
+              <div className="my-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+                    Quantity
+                  </span>
+                  {sProduct.pQuantity > 0 ? (
+                    <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                      In Stock: {sProduct.pQuantity}
+                    </span>
                   ) : (
-                    <div
-                      onClick={(e) =>
-                        addToCart(
-                          sProduct._id,
-                          quantitiy,
-                          sProduct.pPrice,
-                          layoutDispatch,
-                          setQuantitiy,
-                          setAlertq,
-                          fetchData,
-                          totalCost
-                        )
-                      }
-                      style={{ background: "#303031" }}
-                      className={`px-4 py-2 text-white text-center cursor-pointer uppercase`}
-                    >
-                      Add to cart
-                    </div>
+                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">
+                      Out of Stock
+                    </span>
                   )}
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center rounded-lg border border-gray-300 bg-gray-50">
+                    <button
+                      disabled={quantity <= 1}
+                      onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                      className="px-3.5 py-1.5 text-lg font-bold text-gray-600 hover:bg-gray-200 rounded-l-lg disabled:opacity-30"
+                    >
+                      -
+                    </button>
+                    <span className="w-12 text-center font-bold text-gray-800">
+                      {quantity}
+                    </span>
+                    <button
+                      disabled={quantity >= sProduct.pQuantity}
+                      onClick={() => setQuantity((prev) => Math.min(sProduct.pQuantity, prev + 1))}
+                      className="px-3.5 py-1.5 text-lg font-bold text-gray-600 hover:bg-gray-200 rounded-r-lg disabled:opacity-30"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+              {sProduct.pQuantity > 0 ? (
+                <Fragment>
+                  {isInCart ? (
+                    <button
+                      disabled
+                      className="w-full rounded-lg bg-gray-400 py-3 font-bold text-white uppercase text-sm tracking-wider cursor-not-allowed"
+                    >
+                      ✓ In Cart
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleAddToCart}
+                      className="w-full rounded-lg bg-yellow-600 hover:bg-yellow-700 py-3 font-bold text-white uppercase text-sm tracking-wider transition active:scale-[0.98]"
+                    >
+                      Add to Cart
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      handleAddToCart();
+                      history.push("/checkout"); // Updated to use history.push
+                    }}
+                    className="w-full rounded-lg bg-gray-900 hover:bg-black py-3 font-bold text-white uppercase text-sm tracking-wider transition active:scale-[0.98]"
+                  >
+                    Buy Now
+                  </button>
                 </Fragment>
               ) : (
-                <Fragment>
-                  {layoutData.inCart !== null &&
-                  layoutData.inCart.includes(sProduct._id) === true ? (
-                    <div
-                      style={{ background: "#303031" }}
-                      className={`px-4 py-2 text-white text-center cursor-not-allowed uppercase opacity-75`}
-                    >
-                      In cart
-                    </div>
-                  ) : (
-                    <div
-                      style={{ background: "#303031" }}
-                      disabled={true}
-                      className="px-4 py-2 text-white opacity-50 cursor-not-allowed text-center uppercase"
-                    >
-                      Out of stock
-                    </div>
-                  )}
-                </Fragment>
+                <button
+                  disabled
+                  className="col-span-2 w-full rounded-lg bg-gray-300 py-3 font-bold text-gray-500 uppercase text-sm tracking-wider cursor-not-allowed"
+                >
+                  Out of Stock
+                </button>
               )}
-              {/* Incart and out of stock button End */}
             </div>
+
           </div>
         </div>
       </section>
-      {/* Product Details Section two */}
+
       <ProductDetailsSectionTwo />
     </Fragment>
   );

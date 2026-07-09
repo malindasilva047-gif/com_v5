@@ -15,93 +15,114 @@ const syncProductsFromSheet = async () => {
   }
 
   try {
-    console.log("🔄 Starting Google Sheet Auto-Sync (Categories & Products)...");
+    console.log("🔄 Starting Google Sheet Auto-Sync...");
 
-    const response = await axios.get(SHEET_URL, { responseType: "text" });
+    // Append timestamp (&t=...) to force bypass Google's published CSV cache
+    const cacheBusterUrl = `${SHEET_URL}${SHEET_URL.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    const response = await axios.get(cacheBusterUrl, { responseType: "text" });
+    
     const results = [];
     const stream = Readable.from(response.data);
 
-    stream
-      .pipe(csv())
-      .on("data", (data) => results.push(data))
-      .on("end", async () => {
-        console.log(`📊 Processing ${results.length} rows from Google Sheet.`);
+    await new Promise((resolve, reject) => {
+      stream
+        .pipe(csv())
+        .on("data", (data) => results.push(data))
+        .on("error", (err) => reject(err))
+        .on("end", () => resolve());
+    });
 
-        const activeSheetProductNames = [];
+    if (results.length === 0) {
+      console.log("⚠️ Sheet returned 0 rows. Skipping update.");
+      return;
+    }
 
-        for (const row of results) {
-          const pName = row.Name || row.name || row.pName;
-          const pDescription = row.Description || row.description || row.pDescription || "No description provided";
-          const pPrice = parseFloat(row.Price || row.price || row.pPrice || 0);
-          const pQuantity = parseInt(row.Quantity || row.quantity || row.pQuantity || 0);
-          const imageUrl = row.Image || row.image || row.pImage || "";
-          const pStatus = row.Status || row.status || row.pStatus || "Active";
-          const categoryName = row.Category || row.category || row.pCategory;
-          const categoryDesc = row["Category Description"] || row.categoryDescription || `${categoryName} category`;
-          const pOffer = parseInt(row.Offer || row.pOffer || 0);
+    const activeSheetProductNames = [];
 
-          if (!pName || isNaN(pPrice)) continue;
+    for (const row of results) {
+      const pName = (row["Product Name"] || row["Name"] || row["pName"] || "").trim();
+      const pDescription = row["Description"] || row["description"] || "No description provided";
+      
+      const rawPrice = row["Price"] || row["price"] || "0";
+      const pPrice = parseFloat(String(rawPrice).replace(/[^0-9.]/g, "")); 
+      
+      const rawQuantity = row["Stock"] || row["Quantity"] || row["quantity"] || "0";
+      const pQuantity = parseInt(rawQuantity, 10) || 0;
 
-          activeSheetProductNames.push(pName);
+      const pStatus = row["Status"] || row["status"] || "Active";
+      const categoryName = (row["Category Name"] || row["Category"] || row["category"] || "").trim();
+      const categoryDesc = row["Category Description"] || `${categoryName} category`;
+      
+      const rawOffer = row["Offer %"] || row["Offer"] || "0";
+      const pOffer = parseInt(rawOffer, 10) || 0;
 
-          // 1. Dynamic Category Auto-Creation/Lookup
-          let categoryId = null;
-          if (categoryName) {
-            let category = await categoryModel.findOne({
-              cName: { $regex: new RegExp(`^${categoryName.trim()}$`, "i") }
+      const img1 = row["Image 1"] || "";
+      const img2 = row["Image 2"] || "";
+      const pImages = [img1, img2].filter((url) => url && url.trim() !== "");
+
+      if (!pName || isNaN(pPrice)) continue;
+
+      activeSheetProductNames.push(pName);
+
+      try {
+        // 1. Category Auto-Lookup or Creation
+        let categoryId = null;
+        if (categoryName) {
+          let category = await categoryModel.findOne({
+            cName: { $regex: new RegExp(`^${categoryName}$`, "i") }
+          });
+
+          if (!category) {
+            category = await categoryModel.create({
+              cName: categoryName,
+              cDescription: categoryDesc,
+              cStatus: "Active",
+              cImage: img1 || "default_cat.png"
             });
-
-            if (!category) {
-              category = new categoryModel({
-                cName: categoryName.trim(),
-                cDescription: categoryDesc,
-                cStatus: "Active",
-                cImage: imageUrl || "default_cat.png"
-              });
-              await category.save();
-              console.log(`📁 Auto-Created Category: ${category.cName}`);
-            }
-            categoryId = category._id;
           }
-
-          // 2. Product Upsert (Create / Update)
-          const updateData = {
-            pName: pName.trim(),
-            pDescription,
-            pPrice,
-            pQuantity,
-            pStatus,
-            pOffer,
-            ...(categoryId && { pCategory: categoryId }),
-            ...(imageUrl && { pImages: [imageUrl] })
-          };
-
-          await productModel.findOneAndUpdate(
-            { pName: pName.trim() },
-            { $set: updateData },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
-          );
-
-          console.log(`✅ Synced Product: ${pName}`);
+          categoryId = category._id;
         }
 
-        // 3. Handle Deleted Products from Sheet (Disabled state setting)
-        if (activeSheetProductNames.length > 0) {
-          await productModel.updateMany(
-            { pName: { $nin: activeSheetProductNames } },
-            { $set: { pStatus: "Disabled" } }
-          );
-        }
+        // 2. Upsert Product Details
+        const updateData = {
+          pName,
+          pDescription,
+          pPrice,
+          pQuantity,
+          pStatus,
+          pOffer,
+          ...(categoryId && { pCategory: categoryId }),
+          pImages: pImages.length > 0 ? pImages : ["default_product.png"]
+        };
 
-        console.log("✨ Google Sheet Category & Product Sync Completed Successfully!");
+        await productModel.findOneAndUpdate(
+          { pName: { $regex: new RegExp(`^${pName}$`, "i") } },
+          { $set: updateData },
+          { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+      } catch (rowError) {
+        console.error(`❌ Error syncing product "${pName}":`, rowError.message);
+      }
+    }
+
+    // 3. Remove products from Database if missing from Google Sheet
+    if (activeSheetProductNames.length > 0) {
+      const deleteResult = await productModel.deleteMany({
+        pName: { 
+          $nin: activeSheetProductNames.map((name) => new RegExp(`^${name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, "i")) 
+        }
       });
+      console.log(`🗑️ Removed ${deleteResult.deletedCount} old products not in Excel.`);
+    }
+
+    console.log("✨ Google Sheet Sync Completed Successfully!");
   } catch (error) {
     console.error("❌ Google Sheet Sync Error:", error.message);
   }
 };
 
-// සෑම විනාඩි 5කට වරක් Auto-Sync වීම
-cron.schedule("*/5 * * * *", () => {
+// Sync every 2 minutes
+cron.schedule("*/2 * * * *", () => {
   syncProductsFromSheet();
 });
 
